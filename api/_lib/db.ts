@@ -17,7 +17,7 @@ export async function q<T = Record<string, unknown>>(text: string, params: unkno
 }
 
 const SCHEMA = [
-  `CREATE TABLE IF NOT EXISTS cases (
+  `CREATE TABLE IF NOT EXISTS nagrik_cases (
      id SERIAL PRIMARY KEY,
      issue TEXT NOT NULL,
      severity SMALLINT NOT NULL CHECK (severity BETWEEN 1 AND 5),
@@ -36,21 +36,21 @@ const SCHEMA = [
      demo BOOLEAN NOT NULL DEFAULT FALSE,
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
-  `CREATE INDEX IF NOT EXISTS cases_open_idx ON cases (status, issue)`,
-  `CREATE TABLE IF NOT EXISTS photos (
+  `CREATE INDEX IF NOT EXISTS nagrik_cases_open_idx ON nagrik_cases (status, issue)`,
+  `CREATE TABLE IF NOT EXISTS nagrik_photos (
      id SERIAL PRIMARY KEY,
-     case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+     case_id INTEGER NOT NULL REFERENCES nagrik_cases(id) ON DELETE CASCADE,
      kind TEXT NOT NULL CHECK (kind IN ('before','after')),
      jpeg_base64 TEXT NOT NULL,
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
-  `CREATE INDEX IF NOT EXISTS photos_case_idx ON photos (case_id, kind)`,
-  `CREATE TABLE IF NOT EXISTS events (
+  `CREATE INDEX IF NOT EXISTS nagrik_photos_case_idx ON nagrik_photos (case_id, kind)`,
+  `CREATE TABLE IF NOT EXISTS nagrik_events (
      id SERIAL PRIMARY KEY,
-     case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+     case_id INTEGER NOT NULL REFERENCES nagrik_cases(id) ON DELETE CASCADE,
      kind TEXT NOT NULL,
      note TEXT,
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
-  `CREATE TABLE IF NOT EXISTS ai_calls (
+  `CREATE TABLE IF NOT EXISTS nagrik_ai_calls (
      id SERIAL PRIMARY KEY,
      route TEXT NOT NULL, provider TEXT, ok BOOLEAN NOT NULL, ms INTEGER, prompt_version TEXT, issue TEXT, confidence REAL,
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
@@ -72,18 +72,18 @@ export function ensureSchema(): Promise<void> {
       const sql = db();
       for (const s of SCHEMA) await sql.query(s);
       if (process.env.SEED_DEMO === 'false') return;
-      const [{ n }] = (await sql.query('SELECT COUNT(*)::int AS n FROM cases')) as { n: number }[];
+      const [{ n }] = (await sql.query('SELECT COUNT(*)::int AS n FROM nagrik_cases')) as { n: number }[];
       if (n > 0) return;
       for (const d of DEMO) {
         const [{ id }] = (await sql.query(
-          `INSERT INTO cases (issue, severity, title, description, lat, lng, locality, status, plus_ones, sample_photo, demo, created_at, updated_at)
+          `INSERT INTO nagrik_cases (issue, severity, title, description, lat, lng, locality, status, plus_ones, sample_photo, demo, created_at, updated_at)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE, NOW() - make_interval(days => $11), NOW() - make_interval(days => GREATEST($11 - 3, 0))) RETURNING id`,
           [d.issue, d.severity, `${d.title} (demo)`, d.description, d.lat, d.lng, d.locality, d.status, d.plus, d.photo, d.days],
         )) as { id: number }[];
-        await sql.query(`INSERT INTO events (case_id, kind, note, created_at) VALUES ($1, 'reported', NULL, NOW() - make_interval(days => $2))`, [id, d.days]);
-        if (d.status !== 'reported') await sql.query(`INSERT INTO events (case_id, kind, note, created_at) VALUES ($1, 'filed', 'Filed on WhatsApp', NOW() - make_interval(days => $2))`, [id, d.days - 1]);
-        if (d.status === 'acknowledged' || d.status === 'fixed') await sql.query(`INSERT INTO events (case_id, kind, note, created_at) VALUES ($1, 'acknowledged', NULL, NOW() - make_interval(days => $2))`, [id, Math.max(d.days - 5, 1)]);
-        if (d.status === 'fixed') await sql.query(`INSERT INTO events (case_id, kind, note, created_at) VALUES ($1, 'fixed', 'New cover fitted', NOW() - make_interval(days => 3))`, [id]);
+        await sql.query(`INSERT INTO nagrik_events (case_id, kind, note, created_at) VALUES ($1, 'reported', NULL, NOW() - make_interval(days => $2))`, [id, d.days]);
+        if (d.status !== 'reported') await sql.query(`INSERT INTO nagrik_events (case_id, kind, note, created_at) VALUES ($1, 'filed', 'Filed on WhatsApp', NOW() - make_interval(days => $2))`, [id, d.days - 1]);
+        if (d.status === 'acknowledged' || d.status === 'fixed') await sql.query(`INSERT INTO nagrik_events (case_id, kind, note, created_at) VALUES ($1, 'acknowledged', NULL, NOW() - make_interval(days => $2))`, [id, Math.max(d.days - 5, 1)]);
+        if (d.status === 'fixed') await sql.query(`INSERT INTO nagrik_events (case_id, kind, note, created_at) VALUES ($1, 'fixed', 'New cover fitted', NOW() - make_interval(days => 3))`, [id]);
       }
     })().catch((e) => { ready = null; throw e; });
   }

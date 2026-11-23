@@ -10,8 +10,8 @@ export default async function handler(req: Request): Promise<Response> {
   if (out.db) {
     try {
       const [s] = await q(`SELECT COUNT(*)::int AS calls, COALESCE(AVG(ok::int), 0)::real AS "okRate", COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ms), 0)::int AS "medianMs"
-        FROM ai_calls WHERE created_at > NOW() - INTERVAL '30 days'`);
-      const [c] = await q(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status = 'fixed')::int AS fixed, COALESCE(SUM(plus_ones), 0)::int AS reports FROM cases`);
+        FROM nagrik_ai_calls WHERE created_at > NOW() - INTERVAL '30 days'`);
+      const [c] = await q(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status = 'fixed')::int AS fixed, COALESCE(SUM(plus_ones), 0)::int AS reports FROM nagrik_cases`);
       Object.assign(out, { photoReader: s, cases: c });
     } catch (e) {
       out.db = 'unreachable';

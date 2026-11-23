@@ -33,6 +33,8 @@ await admin.query('DROP DATABASE IF EXISTS nagrik_test');
 await admin.query('CREATE DATABASE nagrik_test');
 await admin.end();
 const pool = new pg.Pool({ connectionString: `${base}/nagrik_test` });
+// Another app's tables with the same plain names (as in a shared Neon database) must not get in the way
+await pool.query('CREATE TABLE photos (id SERIAL PRIMARY KEY, post_id INTEGER, data BYTEA); CREATE TABLE events (id SERIAL PRIMARY KEY, title TEXT)');
 const raw = { getTypeParser: () => (v: string) => v };
 
 const server = http.createServer(async (req, res) => {
@@ -67,7 +69,7 @@ const [cases, kase, analyze, photo, status] = await Promise.all(['cases', 'case'
 
 let r = await cases(req('/api/cases'));
 let d = await r.json();
-ok(r.status === 200 && d.cases.length === 6 && d.cases.every((c: { demo: boolean }) => c.demo), 'fresh database is seeded with 6 sample reports');
+ok(r.status === 200 && d.cases.length === 6 && d.cases.every((c: { demo: boolean }) => c.demo), 'fresh database is seeded with 6 sample reports, alongside another app\'s photos and events tables');
 
 r = await analyze(req('/api/analyze', 'POST', { image: 'aGVsbG8=' }));
 d = await r.json();

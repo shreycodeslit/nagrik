@@ -19,11 +19,11 @@ export default async function handler(req: Request): Promise<Response> {
     if (req.method === 'GET') {
       const [c] = await q(`SELECT id, issue, severity, title, description, description_hi AS "descriptionHi", lat, lng, locality, city, status, filed_ref AS "filedRef",
           plus_ones AS "plusOnes", created_at AS "createdAt", updated_at AS "updatedAt", demo,
-          (sample_photo IS NOT NULL OR EXISTS (SELECT 1 FROM photos p WHERE p.case_id = cases.id AND p.kind = 'before')) AS "hasPhoto",
-          EXISTS (SELECT 1 FROM photos p WHERE p.case_id = cases.id AND p.kind = 'after') AS "hasAfter"
-        FROM cases WHERE id = $1`, [id]);
+          (sample_photo IS NOT NULL OR EXISTS (SELECT 1 FROM nagrik_photos p WHERE p.case_id = nagrik_cases.id AND p.kind = 'before')) AS "hasPhoto",
+          EXISTS (SELECT 1 FROM nagrik_photos p WHERE p.case_id = nagrik_cases.id AND p.kind = 'after') AS "hasAfter"
+        FROM nagrik_cases WHERE id = $1`, [id]);
       if (!c) return json({ error: 'No such case.' }, 404);
-      const events = await q(`SELECT kind, note, created_at AS "createdAt" FROM events WHERE case_id = $1 ORDER BY created_at`, [id]);
+      const events = await q(`SELECT kind, note, created_at AS "createdAt" FROM nagrik_events WHERE case_id = $1 ORDER BY created_at`, [id]);
       return json({ case: { ...c, events } });
     }
     if (req.method !== 'POST') return json({ error: 'Use GET or POST.' }, 405);
@@ -31,20 +31,20 @@ export default async function handler(req: Request): Promise<Response> {
     const p = Action.safeParse(await req.json().catch(() => null));
     if (!p.success) return json({ error: 'Unknown action.' }, 400);
     const { action, ref, photo } = p.data;
-    const [exists] = await q<{ status: string }>(`SELECT status FROM cases WHERE id = $1`, [id]);
+    const [exists] = await q<{ status: string }>(`SELECT status FROM nagrik_cases WHERE id = $1`, [id]);
     if (!exists) return json({ error: 'No such case.' }, 404);
 
     if (action === 'plus_one') {
-      await q(`UPDATE cases SET plus_ones = plus_ones + 1, updated_at = NOW() WHERE id = $1`, [id]);
-      await q(`INSERT INTO events (case_id, kind) VALUES ($1, 'plus_one')`, [id]);
+      await q(`UPDATE nagrik_cases SET plus_ones = plus_ones + 1, updated_at = NOW() WHERE id = $1`, [id]);
+      await q(`INSERT INTO nagrik_events (case_id, kind) VALUES ($1, 'plus_one')`, [id]);
     } else if (action === 'fixed') {
       if (!photo) return json({ error: 'Add a photo showing it fixed.' }, 400);
-      await q(`INSERT INTO photos (case_id, kind, jpeg_base64) VALUES ($1, 'after', $2)`, [id, photo]);
-      await q(`UPDATE cases SET status = 'fixed', updated_at = NOW() WHERE id = $1`, [id]);
-      await q(`INSERT INTO events (case_id, kind, note) VALUES ($1, 'fixed', 'After photo added')`, [id]);
+      await q(`INSERT INTO nagrik_photos (case_id, kind, jpeg_base64) VALUES ($1, 'after', $2)`, [id, photo]);
+      await q(`UPDATE nagrik_cases SET status = 'fixed', updated_at = NOW() WHERE id = $1`, [id]);
+      await q(`INSERT INTO nagrik_events (case_id, kind, note) VALUES ($1, 'fixed', 'After photo added')`, [id]);
     } else {
-      await q(`UPDATE cases SET status = $2, filed_ref = COALESCE($3, filed_ref), updated_at = NOW() WHERE id = $1 AND status <> 'fixed'`, [id, action, ref ?? null]);
-      await q(`INSERT INTO events (case_id, kind, note) VALUES ($1, $2, $3)`, [id, action, ref ? `Complaint no. ${ref}` : null]);
+      await q(`UPDATE nagrik_cases SET status = $2, filed_ref = COALESCE($3, filed_ref), updated_at = NOW() WHERE id = $1 AND status <> 'fixed'`, [id, action, ref ?? null]);
+      await q(`INSERT INTO nagrik_events (case_id, kind, note) VALUES ($1, $2, $3)`, [id, action, ref ? `Complaint no. ${ref}` : null]);
     }
     return json({ ok: true });
   } catch (e) {

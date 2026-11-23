@@ -9,8 +9,8 @@ import { hamming, inGurugram, metresBetween } from '../src/lib/geo';
 export const config = { runtime: 'edge' };
 
 const SUMMARY = `id, issue, severity, title, lat, lng, locality, status, plus_ones AS "plusOnes", created_at AS "createdAt", updated_at AS "updatedAt", demo,
-  (sample_photo IS NOT NULL OR EXISTS (SELECT 1 FROM photos p WHERE p.case_id = cases.id AND p.kind = 'before')) AS "hasPhoto",
-  EXISTS (SELECT 1 FROM photos p WHERE p.case_id = cases.id AND p.kind = 'after') AS "hasAfter"`;
+  (sample_photo IS NOT NULL OR EXISTS (SELECT 1 FROM nagrik_photos p WHERE p.case_id = nagrik_cases.id AND p.kind = 'before')) AS "hasPhoto",
+  EXISTS (SELECT 1 FROM nagrik_photos p WHERE p.case_id = nagrik_cases.id AND p.kind = 'after') AS "hasAfter"`;
 
 const NewCase = z.object({
   issue: z.enum(ISSUE_IDS),
@@ -29,7 +29,7 @@ const NewCase = z.object({
 export default async function handler(req: Request): Promise<Response> {
   try {
     if (req.method === 'GET') {
-      const rows = await q(`SELECT ${SUMMARY} FROM cases WHERE status <> 'fixed' OR updated_at > NOW() - INTERVAL '60 days' ORDER BY created_at DESC LIMIT 500`);
+      const rows = await q(`SELECT ${SUMMARY} FROM nagrik_cases WHERE status <> 'fixed' OR updated_at > NOW() - INTERVAL '60 days' ORDER BY created_at DESC LIMIT 500`);
       return new Response(JSON.stringify({ cases: rows }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=20, stale-while-revalidate=60' } });
     }
     if (req.method !== 'POST') return json({ error: 'Use GET or POST.' }, 405);
@@ -43,7 +43,7 @@ export default async function handler(req: Request): Promise<Response> {
     // Same problem already reported? Same kind, open, within 60 m; a similar photo makes it a near-certain match.
     if (!c.force) {
       const near = await q<{ id: number; lat: number; lng: number; photo_hash: string | null; title: string; plusOnes: number }>(
-        `SELECT id, lat, lng, photo_hash, title, plus_ones AS "plusOnes" FROM cases
+        `SELECT id, lat, lng, photo_hash, title, plus_ones AS "plusOnes" FROM nagrik_cases
          WHERE issue = $1 AND status <> 'fixed' AND lat BETWEEN $2 - 0.0007 AND $2 + 0.0007 AND lng BETWEEN $3 - 0.0007 AND $3 + 0.0007`,
         [c.issue, c.lat, c.lng]);
       const matches = near
@@ -54,10 +54,10 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     const [row] = await q<{ id: number }>(
-      `INSERT INTO cases (issue, severity, title, description, description_hi, lat, lng, locality, photo_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      `INSERT INTO nagrik_cases (issue, severity, title, description, description_hi, lat, lng, locality, photo_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
       [c.issue, c.severity, c.title, c.description, c.descriptionHi ?? null, c.lat, c.lng, c.locality ?? null, c.photoHash ?? null]);
-    if (c.photo) await q(`INSERT INTO photos (case_id, kind, jpeg_base64) VALUES ($1, 'before', $2)`, [row.id, c.photo]);
-    await q(`INSERT INTO events (case_id, kind) VALUES ($1, 'reported')`, [row.id]);
+    if (c.photo) await q(`INSERT INTO nagrik_photos (case_id, kind, jpeg_base64) VALUES ($1, 'before', $2)`, [row.id, c.photo]);
+    await q(`INSERT INTO nagrik_events (case_id, kind) VALUES ($1, 'reported')`, [row.id]);
     return json({ id: row.id }, 201);
   } catch (e) {
     console.error(JSON.stringify({ route: 'cases', error: e instanceof Error ? e.message : String(e) }));

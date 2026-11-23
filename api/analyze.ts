@@ -27,5 +27,5 @@ export default async function handler(req: Request): Promise<Response> {
 
 function log(provider: string | null, ok: boolean, ms: number | null, issue: string | null, confidence: number | null) {
   // Observability: one row per AI call, so the README can say how often it works and how fast. Never blocks the reply.
-  q('INSERT INTO ai_calls (route, provider, ok, ms, prompt_version, issue, confidence) VALUES ($1,$2,$3,$4,$5,$6,$7)', ['analyze', provider, ok, ms, PROMPT_VERSION, issue, confidence]).catch(() => {});
+  q('INSERT INTO nagrik_ai_calls (route, provider, ok, ms, prompt_version, issue, confidence) VALUES ($1,$2,$3,$4,$5,$6,$7)', ['analyze', provider, ok, ms, PROMPT_VERSION, issue, confidence]).catch(() => {});
 }
