@@ -4,7 +4,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<{ ok: boolean; 
   try {
     const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } });
     const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, status: res.status, data };
+    return { ok: res.ok && !data?.error, status: res.status, data };
   } catch {
     return { ok: false, status: 0, data: { error: 'No connection. Check your internet and try again.' } as T & { error: string } };
   }

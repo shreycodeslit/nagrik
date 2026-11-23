@@ -1,12 +1,17 @@
 // POST /api/analyze { image: base64 JPEG } → what the problem is, how bad, a description, and where faces/plates are.
-import { generateJson, json, rateLimited } from './_lib/ai';
+import { generateJson, json, rateLimited, respondLater } from './_lib/ai';
 import { q } from './_lib/db';
 import { PROMPT_VERSION, SYSTEM, toAnalysis } from './_lib/vision';
 
 export const config = { runtime: 'edge' };
 const MAX_B64 = 2_000_000; // ~1.5 MB of JPEG
 
-export default async function handler(req: Request): Promise<Response> {
+// Answers start streaming at once, so a slow free-tier model can't hit the Edge 25-second start limit
+export default function handler(req: Request): Response {
+  return respondLater(() => handle(req));
+}
+
+async function handle(req: Request): Promise<Response> {
   if (req.method !== 'POST') return json({ error: 'Use POST.' }, 405);
   if (rateLimited(req, 12, 10 * 60_000)) return json({ error: 'Too many photos from you just now. Try again in a few minutes.' }, 429);
   let image = '';
