@@ -37,6 +37,9 @@ const SCHEMA = [
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
   `CREATE INDEX IF NOT EXISTS nagrik_cases_open_idx ON nagrik_cases (status, issue)`,
+  // Two cold starts at once could both seed the samples; keep one of each and make seeding idempotent
+  `DELETE FROM nagrik_cases a USING nagrik_cases b WHERE a.demo AND b.demo AND a.title = b.title AND a.id > b.id`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS nagrik_demo_title_idx ON nagrik_cases (title) WHERE demo`,
   `CREATE TABLE IF NOT EXISTS nagrik_photos (
      id SERIAL PRIMARY KEY,
      case_id INTEGER NOT NULL REFERENCES nagrik_cases(id) ON DELETE CASCADE,
@@ -75,11 +78,14 @@ export function ensureSchema(): Promise<void> {
       const [{ n }] = (await sql.query('SELECT COUNT(*)::int AS n FROM nagrik_cases')) as { n: number }[];
       if (n > 0) return;
       for (const d of DEMO) {
-        const [{ id }] = (await sql.query(
+        const rows = (await sql.query(
           `INSERT INTO nagrik_cases (issue, severity, title, description, lat, lng, locality, status, plus_ones, sample_photo, demo, created_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE, NOW() - make_interval(days => $11), NOW() - make_interval(days => GREATEST($11 - 3, 0))) RETURNING id`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE, NOW() - make_interval(days => $11), NOW() - make_interval(days => GREATEST($11 - 3, 0)))
+           ON CONFLICT (title) WHERE demo DO NOTHING RETURNING id`,
           [d.issue, d.severity, `${d.title} (demo)`, d.description, d.lat, d.lng, d.locality, d.status, d.plus, d.photo, d.days],
         )) as { id: number }[];
+        if (!rows.length) continue; // another instance seeded this one
+        const id = rows[0].id;
         await sql.query(`INSERT INTO nagrik_events (case_id, kind, note, created_at) VALUES ($1, 'reported', NULL, NOW() - make_interval(days => $2))`, [id, d.days]);
         if (d.status !== 'reported') await sql.query(`INSERT INTO nagrik_events (case_id, kind, note, created_at) VALUES ($1, 'filed', 'Filed on WhatsApp', NOW() - make_interval(days => $2))`, [id, d.days - 1]);
         if (d.status === 'acknowledged' || d.status === 'fixed') await sql.query(`INSERT INTO nagrik_events (case_id, kind, note, created_at) VALUES ($1, 'acknowledged', NULL, NOW() - make_interval(days => $2))`, [id, Math.max(d.days - 5, 1)]);

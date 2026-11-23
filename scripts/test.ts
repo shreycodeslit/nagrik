@@ -71,6 +71,10 @@ let r = await cases(req('/api/cases'));
 let d = await r.json();
 ok(r.status === 200 && d.cases.length === 6 && d.cases.every((c: { demo: boolean }) => c.demo), 'fresh database is seeded with 6 sample reports, alongside another app\'s photos and events tables');
 
+// A second instance seeding at the same moment can't create duplicate samples
+const dupSeed = await pool.query(`INSERT INTO nagrik_cases (issue, severity, title, description, lat, lng, demo) SELECT issue, severity, title, description, lat, lng, TRUE FROM nagrik_cases WHERE demo LIMIT 1 ON CONFLICT (title) WHERE demo DO NOTHING`);
+ok(dupSeed.rowCount === 0, 'a duplicate sample insert is ignored by the unique index');
+
 r = await analyze(req('/api/analyze', 'POST', { image: 'aGVsbG8=' }));
 d = await r.json();
 ok(r.status === 200 && d.analysis.issue === 'pothole' && d.analysis.privacyBoxes.length === 1 && d.source === 'gemini', 'photo reader returns a validated analysis');
