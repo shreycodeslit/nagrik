@@ -2,7 +2,9 @@
 
 **Photo in, civic complaint out.** Photograph a pothole, garbage pile, broken streetlight or open manhole in Gurugram. Nagrik reads the photo, blurs faces and number plates, picks the right department, and writes the complaint in English or Hindi. It then tracks the case until it's fixed, on a public map.
 
-Live: _add the Vercel link here_
+Live: **[nagrik-jet.vercel.app](https://nagrik-jet.vercel.app)**
+
+[![Nagrik home page: take or upload a photo of a civic problem](docs/screenshot.jpg)](https://nagrik-jet.vercel.app)
 
 ## What it does
 
@@ -47,5 +49,6 @@ TEST_PG=postgresql://postgres@127.0.0.1:5432 npm test
 - Nagrik doesn't submit to government portals; they have no public API. You send the prepared complaint.
 - Status updates come from residents, not from the city's systems.
 - Gurugram only, for now.
+- The sample photos and the six demo cases on the map are illustrations, labelled as such; reports made in the app use real photos.
 
 Nagrik is an independent project, not a government service. Built by [Shrey Gupta](https://shreygupta-three.vercel.app).
